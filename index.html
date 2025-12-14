@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BÙI TẤN KHANG - BIO</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="loading">
+
+    <div id="welcome-overlay">
+        <div class="welcome-message">
+            <div class="initial-logo-pulse"></div>
+            <h2>CHÀO MỪNG BẠN ĐÃ TRUY CẬP</h2>
+            <p>CUỘN LÊN ĐỂ TIẾP TỤC</p>
+        </div>
+    </div>
+
+    <div id="loading-bar"></div>
+
+    <div class="cyber-grid-bg"></div>
+    <div class="aura-glow-effect"></div>
+
+    <canvas id="matrix-background"></canvas>
+
+    <div class="background-half top-bg-half"></div>
+    <div class="background-half bottom-bg-half"></div>
+
+    <main class="main-screen-container" id="profileContainer">
+
+        <div class="screen-panel">
+
+            <section class="user-profile-hud" data-parallax="0.1">
+                <div class="profile-picture-wrapper">
+                    <img src="avatar.jpg" alt="Avatar" class="profile-picture">
+                </div>
+
+                <h1 class="hud-text">BÙI TẤN KHANG</h1>
+                <p class="hud-subtext">BIO: Software Engineering | Đại Học Quy Nhơn (QNU)</p>
+            </section>
+
+            <section class="social-links-grid-hud">
+
+                <a href="https://www.facebook.com/buitan.khang0206" target="_blank" class="social-hud-link icon-facebook" data-ripple data-delay="1.0">
+                    <i class="fab fa-facebook-f"></i> FACEBOOK
+                </a>
+
+                <a href="https://zalo.me/yourzalonumber" target="_blank" class="social-hud-link icon-zalo" data-ripple data-delay="1.2">
+                    <i class="fas fa-comment-dots"></i> ZALO
+                </a>
+
+                <a href="#email-form" target="_self" class="social-hud-link icon-email" data-action="open-email-form" data-ripple data-delay="1.4">
+                    <i class="fas fa-envelope"></i> EMAIL
+                </a>
+
+                <a href="https://tiktok.com/@yourtiktokhandle" target="_blank" class="social-hud-link icon-tiktok" data-ripple data-delay="1.6">
+                    <i class="fab fa-tiktok"></i> TIKTOK
+                </a>
+
+                <a href="https://discordapp.com/users/YOUR_DISCORD_USER_ID" target="_blank" class="social-hud-link icon-discord" data-ripple data-delay="1.8">
+                    <i class="fab fa-discord"></i> DISCORD
+                </a>
+
+                <a href="https://instagram.com/yourhandle" target="_blank" class="social-hud-link icon-instagram" data-ripple data-delay="2.0">
+                    <i class="fab fa-instagram"></i> INSTAGRAM
+                </a>
+
+                <a href="https://github.com/yourgithubhandle" target="_blank" class="social-hud-link icon-github" data-ripple data-delay="2.2">
+                    <i class="fab fa-github"></i> GITHUB
+                </a>
+
+            </section>
+
+            <div class="status-bar" data-parallax="0.05">
+                <span class="status-text">SYSTEM ONLINE: READY FOR CONNECTION | V 1.0</span>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script src="scripts.js"></script>
+
+
+    <div id="unifiedModal" class="modal-cyber">
+        <div class="modal-content-cyber">
+            <span class="close-button-cyber">&times;</span>
+            <h3 class="modal-title-cyber" id="modalTitle">KẾT NỐI MẠNG XÃ HỘI</h3>
+
+            <p class="modal-text-cyber" id="modalInstruction">
+                Bạn sắp được chuyển hướng đến nền tảng này.
+            </p>
+
+            <div class="modal-details" id="modalDetails">
+                <span id="modalDetailsText"></span>
+
+                <div class="email-form-container" style="display:none;" id="emailFormContainer">
+
+                    <form id="contactForm" action="https://formspree.io/f/xkgdeolq" method="POST">
+                        <input type="hidden" name="_subject" value="Liên hệ từ Web CV (BTKhang)">
+
+                        <input type="text" name="name" placeholder="Tên của bạn" required class="form-input">
+
+                        <input type="email" name="_replyto" placeholder="Email của bạn" required class="form-input">
+
+                        <textarea name="message" placeholder="Nội dung bạn muốn gửi..." required class="form-textarea"></textarea>
+
+                        <button type="submit" class="modal-action-button" id="formSubmitButton">GỬI EMAIL</button>
+                    </form>
+                    <p id="formMessage" style="margin-top: 15px; color: var(--color-secondary);"></p>
+                </div>
+            </div>
+
+            <a href="#" target="_blank" class="modal-action-button" id="modalActionButton">
+                MỞ LIÊN KẾT
+            </a>
+        </div>
+    </div>
+</body>
+</html>

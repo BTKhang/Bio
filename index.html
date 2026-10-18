@@ -1,122 +1,434 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BÙI TẤN KHANG - BIO</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body class="loading">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BÙI TẤN KHANG - BIO</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="avatar.jpg">
 
-    <div id="welcome-overlay">
-        <div class="welcome-message">
-            <div class="initial-logo-pulse"></div>
-            <h2>CHÀO MỪNG BẠN ĐÃ TRUY CẬP</h2>
-            <p>CUỘN LÊN ĐỂ TIẾP TỤC</p>
+  <!-- Fonts & Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+  <!-- Loading Bar -->
+  <div id="loading-bar"></div>
+
+  <!-- Cyber Blast Doors (Hiệu ứng mở ra không gian 3D) -->
+  <div id="cyber-door-container" class="cyber-door-container">
+    <!-- Top-Right Diagonal Shutter Door -->
+    <div class="door-half top-door">
+      <div class="door-bg-image"></div>
+      <div class="door-tech-overlay">
+        <div class="door-grid-lines"></div>
+        <div class="door-status-pill">
+          <span class="door-pill-dot"></span>
+          <span>PROTOCOL: BTK-0206 // SECURE AIRLOCK</span>
         </div>
+      </div>
+      <div class="door-laser-seam top-seam"></div>
     </div>
 
-    <div id="loading-bar"></div>
-
-    <div class="cyber-grid-bg"></div>
-    <div class="aura-glow-effect"></div>
-
-    <canvas id="matrix-background"></canvas>
-
-    <div class="background-half top-bg-half"></div>
-    <div class="background-half bottom-bg-half"></div>
-
-    <main class="main-screen-container" id="profileContainer">
-
-        <div class="screen-panel">
-
-            <section class="user-profile-hud" data-parallax="0.1">
-                <div class="profile-picture-wrapper">
-                    <img src="avatar.jpg" alt="Avatar" class="profile-picture">
-                </div>
-
-                <h1 class="hud-text">BÙI TẤN KHANG</h1>
-                <p class="hud-subtext">BIO: Software Engineering | Đại Học Quy Nhơn (QNU)</p>
-            </section>
-
-            <section class="social-links-grid-hud">
-
-                <a href="https://www.facebook.com/buitan.khang0206" target="_blank" class="social-hud-link icon-facebook" data-ripple data-delay="1.0">
-                    <i class="fab fa-facebook-f"></i> FACEBOOK
-                </a>
-
-                <a href="https://zalo.me/yourzalonumber" target="_blank" class="social-hud-link icon-zalo" data-ripple data-delay="1.2">
-                    <i class="fas fa-comment-dots"></i> ZALO
-                </a>
-
-                <a href="#email-form" target="_self" class="social-hud-link icon-email" data-action="open-email-form" data-ripple data-delay="1.4">
-                    <i class="fas fa-envelope"></i> EMAIL
-                </a>
-
-                <a href="https://tiktok.com/@yourtiktokhandle" target="_blank" class="social-hud-link icon-tiktok" data-ripple data-delay="1.6">
-                    <i class="fab fa-tiktok"></i> TIKTOK
-                </a>
-
-                <a href="https://discordapp.com/users/YOUR_DISCORD_USER_ID" target="_blank" class="social-hud-link icon-discord" data-ripple data-delay="1.8">
-                    <i class="fab fa-discord"></i> DISCORD
-                </a>
-
-                <a href="https://instagram.com/yourhandle" target="_blank" class="social-hud-link icon-instagram" data-ripple data-delay="2.0">
-                    <i class="fab fa-instagram"></i> INSTAGRAM
-                </a>
-
-                <a href="https://github.com/yourgithubhandle" target="_blank" class="social-hud-link icon-github" data-ripple data-delay="2.2">
-                    <i class="fab fa-github"></i> GITHUB
-                </a>
-
-            </section>
-
-            <div class="status-bar" data-parallax="0.05">
-                <span class="status-text">SYSTEM ONLINE: READY FOR CONNECTION | V 1.0</span>
-            </div>
-
+    <!-- Bottom-Left Diagonal Shutter Door -->
+    <div class="door-half bottom-door">
+      <div class="door-bg-image"></div>
+      <div class="door-tech-overlay">
+        <div class="door-grid-lines"></div>
+        <div class="door-status-pill">
+          <span class="door-pill-dot"></span>
+          <span>LOCATION: QNU // SOFTWARE ENGINEERING</span>
         </div>
+      </div>
+      <div class="door-laser-seam bottom-seam"></div>
+    </div>
 
+    <!-- Center Biometric Lock & Portal Trigger -->
+    <div class="door-center-lock" id="doorCenterLock" title="Nhấn để mở giao diện">
+      <div class="lock-outer-radar"></div>
+      <div class="lock-inner-radar"></div>
+      <div class="lock-hex-badge">
+        <i class="fas fa-fingerprint"></i>
+      </div>
+      <div class="lock-ripple-ring"></div>
+    </div>
+
+    <!-- Portal Light Burst on Opening -->
+    <div class="door-light-flare" id="doorLightFlare"></div>
+
+    <!-- Welcome Message & Access Trigger -->
+    <div class="welcome-hud-box" id="welcomeBox">
+      <div class="welcome-logo-pulse"></div>
+      <h2 class="welcome-title">CHÀO MỪNG BẠN ĐÃ TRUY CẬP</h2>
+      <p class="welcome-subtext">CUỘN LÊN HOẶC NHẤN ĐỂ MỞ CỬA HỆ THỐNG</p>
+      <button class="welcome-enter-btn" id="welcomeEnterBtn" data-ripple>
+        <i class="fas fa-unlock-alt"></i> TRUY CẬP HỆ THỐNG
+      </button>
+    </div>
+  </div>
+
+  <!-- 3D Three.js WebGL Canvas Layer -->
+  <div id="webgl-canvas-container"></div>
+
+  <!-- Matrix Digital Rain Canvas -->
+  <canvas id="matrix-background"></canvas>
+
+  <!-- Interactive Cyber Spark Trail Canvas -->
+  <canvas id="spark-canvas"></canvas>
+
+  <!-- CRT Scanlines overlay -->
+  <div class="cyber-scanlines"></div>
+
+  <!-- Top Futuristic Telemetry HUD Bar -->
+  <header class="top-hud-bar">
+    <div class="hud-telemetry">
+      <div class="hud-badge">
+        <span class="status-dot"></span>
+        <span id="systemStatusText">SYSTEM: ONLINE</span>
+      </div>
+      <div class="hud-badge">
+        <i class="far fa-clock"></i>
+        <span id="liveClock">00:00:00</span>
+      </div>
+      <div class="hud-badge">
+        <i class="fas fa-wifi"></i>
+        <span id="livePing">16ms</span>
+      </div>
+    </div>
+
+    <div class="hud-controls">
+      <!-- Quick Scroll to Resource Vault -->
+      <a href="#resourceVault" class="hud-btn" id="navToVaultBtn" title="Xem kho tài nguyên chia sẻ" data-ripple>
+        <i class="fas fa-layer-group"></i> TÀI NGUYÊN
+      </a>
+
+      <!-- Theme Switcher -->
+      <div class="theme-switcher" title="Chọn bảng màu Cyberpunk">
+        <div class="theme-chip cyan" data-theme="cyan" title="Cyber Cyan"></div>
+        <div class="theme-chip magenta" data-theme="magenta" title="Neon Magenta"></div>
+        <div class="theme-chip emerald" data-theme="emerald" title="Matrix Emerald"></div>
+      </div>
+
+      <!-- Sound FX Toggle -->
+      <button class="hud-btn" id="soundToggleBtn" title="Bật/Tắt âm thanh">
+        <div class="sound-bars">
+          <span class="sound-bar"></span>
+          <span class="sound-bar"></span>
+          <span class="sound-bar"></span>
+        </div>
+        <span id="soundStatusText">SFX: OFF</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Side Tech Coordinates (Cyberpunk Decor) -->
+  <aside class="hud-sidebar hud-sidebar-left">
+    <span>LAT: 13.7590° N // LNG: 109.2188° E // QNU</span>
+  </aside>
+  <aside class="hud-sidebar hud-sidebar-right">
+    <span>AUTH // ENCRYPTED 4096-BIT // BTK-0206</span>
+  </aside>
+
+  <!-- Main Scrollable Content Container -->
+  <div class="page-scroll-wrapper">
+
+    <!-- Section 1: Main Stage with 3D Holographic Tilt Card -->
+    <main class="main-stage">
+      <div class="holo-card-hud" id="profileContainer">
+        <!-- Card Holographic Sheen Layer -->
+        <div class="card-sheen"></div>
+        <div class="card-border-glow-line"></div>
+
+        <!-- Profile Header HUD -->
+        <section class="profile-hud-header">
+          <div class="avatar-hud-wrapper">
+            <div class="avatar-ring-rotating"></div>
+            <div class="avatar-ring-counter"></div>
+            <img src="avatar.jpg" alt="Avatar Bùi Tấn Khang" class="avatar-image">
+          </div>
+
+          <h1 class="profile-name" id="profileName" data-text="BÙI TẤN KHANG">BÙI TẤN KHANG</h1>
+          <p class="profile-subtitle">BIO: Software Engineering | Đại Học Quy Nhơn (QNU)</p>
+        </section>
+
+        <!-- Social Links Grid HUD -->
+        <section class="social-links-grid-hud">
+          <a href="https://www.facebook.com/buitan.khang0206" target="_blank" class="social-hud-link icon-facebook" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fab fa-facebook-f"></i>
+              </div>
+              <span>FACEBOOK</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[FB-01]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="https://zalo.me/0971642189" target="_blank" class="social-hud-link icon-zalo" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fas fa-comment-dots"></i>
+              </div>
+              <span>ZALO</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[ZL-02]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="#email-form" class="social-hud-link icon-email" data-action="open-email-form" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fas fa-envelope"></i>
+              </div>
+              <span>EMAIL TRỰC TIẾP</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[EM-03]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="https://tiktok.com/@t.k0206" target="_blank" class="social-hud-link icon-tiktok" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fab fa-tiktok"></i>
+              </div>
+              <span>TIKTOK</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[TT-04]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="https://discordapp.com/users/818502525991780353" target="_blank" class="social-hud-link icon-discord" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fab fa-discord"></i>
+              </div>
+              <span>DISCORD</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[DC-05]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="https://instagram.com/buitan.khang0206" target="_blank" class="social-hud-link icon-instagram" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fab fa-instagram"></i>
+              </div>
+              <span>INSTAGRAM</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[IG-06]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+
+          <a href="https://github.com/BTKhang" target="_blank" class="social-hud-link icon-github" data-ripple>
+            <div class="social-link-left">
+              <div class="social-icon-wrapper">
+                <i class="fab fa-github"></i>
+              </div>
+              <span>GITHUB</span>
+            </div>
+            <div class="social-link-right">
+              <span class="social-code-badge">[GH-07]</span>
+              <i class="fas fa-chevron-right social-arrow"></i>
+            </div>
+          </a>
+        </section>
+
+        <!-- Status Bar Footer -->
+        <footer class="status-bar-hud">
+          <span class="status-bar-text">SYSTEM ONLINE: READY FOR CONNECTION | V 1.0<span class="terminal-cursor"></span></span>
+        </footer>
+      </div>
     </main>
 
-    <script src="scripts.js"></script>
+    <!-- Section 2: Resource Vault & File Share (Nơi share tài nguyên qua link) -->
+    <section class="resource-vault-section" id="resourceVault">
+      <div class="vault-inner-container">
+        
+        <!-- Vault Header -->
+        <div class="vault-header">
+          <div class="vault-header-title-box">
+            <div class="vault-title-badge">
+              <i class="fas fa-satellite-dish"></i> DATA VAULT // KHO TÀI NGUYÊN
+            </div>
+            <h2 class="vault-heading">TÀI NGUYÊN CHIA SẺ</h2>
+            <p class="vault-subheading">Kho lưu trữ liên kết tải mã nguồn, tài liệu CNTT & công cụ lập trình</p>
+          </div>
 
+          <div class="vault-header-actions">
+            <button class="admin-vault-btn" id="openAdminBtn" data-ripple title="Trang quản trị tài nguyên (Mật khẩu: 0971642189)">
+              <i class="fas fa-user-shield"></i> TRANG QUẢN TRỊ
+            </button>
+          </div>
+        </div>
 
-    <div id="unifiedModal" class="modal-cyber">
-        <div class="modal-content-cyber">
-            <span class="close-button-cyber">&times;</span>
-            <h3 class="modal-title-cyber" id="modalTitle">KẾT NỐI MẠNG XÃ HỘI</h3>
+        <!-- Filter & Search Toolbar -->
+        <div class="vault-toolbar">
+          <div class="vault-search-box">
+            <i class="fas fa-search vault-search-icon"></i>
+            <input type="text" id="resourceSearchInput" class="vault-search-input" placeholder="Tìm kiếm tài nguyên (source code, tool, tài liệu)...">
+          </div>
 
-            <p class="modal-text-cyber" id="modalInstruction">
-                Bạn sắp được chuyển hướng đến nền tảng này.
-            </p>
+          <div class="vault-category-chips" id="vaultCategoryChips">
+            <button class="category-chip active" data-category="Tất cả">Tất cả</button>
+            <button class="category-chip" data-category="Source Code">Source Code</button>
+            <button class="category-chip" data-category="Tools">Tools</button>
+            <button class="category-chip" data-category="Tài Liệu">Tài Liệu</button>
+            <button class="category-chip" data-category="Media">Media</button>
+          </div>
+        </div>
 
-            <div class="modal-details" id="modalDetails">
-                <span id="modalDetailsText"></span>
+        <!-- 3D Resource Cards Grid -->
+        <div class="resource-cards-grid" id="resourceCardsGrid">
+          <!-- Dynamically populated from /api/resources -->
+          <div class="resource-loading-state">
+            <div class="resource-spinner"></div>
+            <span>ĐANG KẾT NỐI KHO DỮ LIỆU...</span>
+          </div>
+        </div>
 
-                <div class="email-form-container" style="display:none;" id="emailFormContainer">
+        <!-- Vault Footer Decal -->
+        <div class="vault-footer-hud">
+          <span>// BTK DATA CLOUD // ENCRYPTED SHARED REPOSITORY // END OF TRANSMISSION //</span>
+        </div>
 
-                    <form id="contactForm" action="https://formspree.io/f/xkgdeolq" method="POST">
-                        <input type="hidden" name="_subject" value="Liên hệ từ Web CV (BTKhang)">
+      </div>
+    </section>
 
-                        <input type="text" name="name" placeholder="Tên của bạn" required class="form-input">
+  </div>
 
-                        <input type="email" name="_replyto" placeholder="Email của bạn" required class="form-input">
+  <!-- Unified Cyber Modal (Social & Contact) -->
+  <div id="unifiedModal" class="modal-cyber">
+    <div class="modal-content-cyber">
+      <span class="close-button-cyber" title="Đóng">&times;</span>
+      <h3 class="modal-title-cyber" id="modalTitle">KẾT NỐI MẠNG XÃ HỘI</h3>
 
-                        <textarea name="message" placeholder="Nội dung bạn muốn gửi..." required class="form-textarea"></textarea>
+      <p class="modal-text-cyber" id="modalInstruction">
+        Bạn sắp được chuyển hướng đến nền tảng này.
+      </p>
 
-                        <button type="submit" class="modal-action-button" id="formSubmitButton">GỬI EMAIL</button>
-                    </form>
-                    <p id="formMessage" style="margin-top: 15px; color: var(--color-secondary);"></p>
-                </div>
+      <div class="modal-details" id="modalDetails">
+        <span id="modalDetailsText"></span>
+
+        <!-- Email Contact Form -->
+        <div class="email-form-container" style="display:none;" id="emailFormContainer">
+          <form id="contactForm" action="https://formspree.io/f/xkgdeolq" method="POST">
+            <input type="hidden" name="_subject" value="Liên hệ từ Web CV 3D (BTKhang)">
+            <input type="text" name="name" placeholder="Tên của bạn" required class="form-input">
+            <input type="email" name="_replyto" placeholder="Email của bạn" required class="form-input">
+            <textarea name="message" placeholder="Nội dung bạn muốn gửi..." required class="form-textarea"></textarea>
+            <button type="submit" class="modal-action-button" id="formSubmitButton" data-ripple>GỬI EMAIL</button>
+          </form>
+          <p id="formMessage"></p>
+        </div>
+      </div>
+
+      <a href="#" target="_blank" class="modal-action-button" id="modalActionButton" data-ripple>
+        MỞ LIÊN KẾT
+      </a>
+    </div>
+  </div>
+
+  <!-- Admin Management Modal (Password: 0971642189) -->
+  <div id="adminModal" class="modal-cyber">
+    <div class="modal-content-cyber admin-modal-content">
+      <span class="close-button-cyber" id="closeAdminModalBtn" title="Đóng">&times;</span>
+
+      <!-- Step 1: Password Authentication Form -->
+      <div id="adminAuthSection">
+        <div class="admin-auth-header">
+          <div class="admin-shield-icon">
+            <i class="fas fa-lock"></i>
+          </div>
+          <h3 class="modal-title-cyber">QUẢN TRỊ VIÊN</h3>
+          <p class="modal-text-cyber">Nhập mã bảo mật để quản lý kho tài nguyên chia sẻ.</p>
+        </div>
+
+        <form id="adminLoginForm">
+          <input type="password" id="adminPasswordInput" class="form-input" placeholder="Nhập mật khẩu quản trị..." required autocomplete="current-password">
+          <button type="submit" class="modal-action-button" id="adminLoginBtn" data-ripple>
+            <i class="fas fa-key"></i> XÁC NHẬN MẬT KHẨU
+          </button>
+        </form>
+        <p id="adminAuthError" class="admin-error-text"></p>
+      </div>
+
+      <!-- Step 2: Resource Management Dashboard -->
+      <div id="adminDashboardSection" style="display:none;">
+        <div class="admin-dash-header">
+          <div class="admin-dash-title-left">
+            <span class="status-dot"></span>
+            <h4>BẢNG ĐIỀU KHIỂN TÀI NGUYÊN</h4>
+          </div>
+          <button id="adminLogoutBtn" class="admin-logout-btn" title="Đăng xuất">
+            <i class="fas fa-sign-out-alt"></i> Thoát
+          </button>
+        </div>
+
+        <!-- Add Resource Form -->
+        <div class="admin-add-card">
+          <h5><i class="fas fa-plus-circle"></i> THÊM TÀI NGUYÊN MỚI</h5>
+          <form id="addResourceForm">
+            <div class="form-row">
+              <input type="text" id="resTitleInput" class="form-input" placeholder="Tiêu đề tài nguyên..." required>
+              <select id="resCategoryInput" class="form-input form-select">
+                <option value="Source Code">Source Code</option>
+                <option value="Tools">Tools</option>
+                <option value="Tài Liệu">Tài Liệu</option>
+                <option value="Media">Media</option>
+              </select>
             </div>
 
-            <a href="#" target="_blank" class="modal-action-button" id="modalActionButton">
-                MỞ LIÊN KẾT
-            </a>
+            <div class="form-row">
+              <input type="url" id="resUrlInput" class="form-input" placeholder="Đường link chia sẻ (https://...)" required>
+              <select id="resBadgeInput" class="form-input form-select">
+                <option value="NEW">Badge: NEW</option>
+                <option value="HOT">Badge: HOT</option>
+                <option value="PRO">Badge: PRO</option>
+                <option value="FREE">Badge: FREE</option>
+              </select>
+            </div>
+
+            <textarea id="resDescInput" class="form-textarea" placeholder="Mô tả ngắn về tài nguyên này..."></textarea>
+
+            <button type="submit" class="modal-action-button" id="submitResourceBtn" data-ripple>
+              <i class="fas fa-cloud-upload-alt"></i> ĐĂNG TÀI NGUYÊN LÊN WEB
+            </button>
+          </form>
+          <p id="addResourceMsg" class="admin-success-text"></p>
         </div>
+
+        <!-- Current Resources List in Admin -->
+        <div class="admin-list-section">
+          <h5>DANH SÁCH HIỆN CÓ (<span id="adminResourceCount">0</span>)</h5>
+          <div id="adminResourcesList" class="admin-resources-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+      </div>
+
     </div>
+  </div>
+
+  <!-- Vite Module Entry -->
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -1,25 +1,30 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '0971642189';
+
+// 1. Supabase Cloud Database Config
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabase = null;
+if (SUPABASE_URL && SUPABASE_KEY) {
+  try {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('[DATABASE] Đã kích hoạt Supabase Client!');
+  } catch (err) {
+    console.warn('[DATABASE] Lỗi khởi tạo Supabase:', err.message);
+  }
+}
+
+// 2. MongoDB Atlas Config (Alternative Option)
 const MONGODB_URI = process.env.MONGODB_URI;
-
-// In-memory admin tokens
-const activeAdminTokens = new Set();
-
-// Mongoose Schema for Cloud Database
 const ResourceSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, default: '' },
@@ -28,27 +33,21 @@ const ResourceSchema = new mongoose.Schema({
   badge: { type: String, default: 'NEW' },
   createdAt: { type: Date, default: Date.now }
 });
-
 const ResourceModel = mongoose.models.Resource || mongoose.model('Resource', ResourceSchema);
 
-// Cached MongoDB Connection for Serverless
-let isConnected = false;
-async function connectToDatabase() {
-  if (isConnected || !MONGODB_URI) return isConnected;
+let isMongoConnected = false;
+async function connectToMongo() {
+  if (isMongoConnected || !MONGODB_URI) return isMongoConnected;
   try {
-    const db = await mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-    });
-    isConnected = db.connections[0].readyState === 1;
-    console.log('[DATABASE] Kết nối MongoDB Atlas thành công!');
-    return isConnected;
+    const db = await mongoose.connect(MONGODB_URI, { bufferCommands: false });
+    isMongoConnected = db.connections[0].readyState === 1;
+    return isMongoConnected;
   } catch (err) {
-    console.warn('[DATABASE] Không thể kết nối MongoDB:', err.message);
     return false;
   }
 }
 
-// Local Fallback Dataset
+// 3. In-memory / Initial Fallback Dataset
 const defaultResources = [
   {
     id: "res-1",
@@ -89,6 +88,7 @@ const defaultResources = [
 ];
 
 let memoryResources = [...defaultResources];
+const activeAdminTokens = new Set();
 
 // Middleware
 app.use(cors());
@@ -112,11 +112,17 @@ function requireAdmin(req, res, next) {
 
 // API: System Status
 app.get('/api/status', async (req, res) => {
-  const dbStatus = await connectToDatabase();
+  let dbName = 'Memory / JSON Store';
+  if (supabase) {
+    dbName = 'Supabase (PostgreSQL)';
+  } else if (await connectToMongo()) {
+    dbName = 'MongoDB Atlas';
+  }
+
   res.json({
     status: 'ONLINE',
     version: '2.0.0',
-    database: dbStatus ? 'MongoDB Atlas (Connected)' : 'Local Memory Store',
+    database: dbName,
     platform: 'Vercel Serverless',
     timestamp: new Date().toISOString()
   });
@@ -162,9 +168,36 @@ app.get('/api/admin/verify', requireAdmin, (req, res) => {
 
 // API: Get Resources (Public)
 app.get('/api/resources', async (req, res) => {
-  try {
-    const hasDb = await connectToDatabase();
-    if (hasDb) {
+  // 1. Try Supabase
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('resources')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const formatted = data.map(item => ({
+          id: item.id.toString(),
+          title: item.title,
+          description: item.description,
+          url: item.url,
+          category: item.category,
+          badge: item.badge,
+          createdAt: item.created_at
+        }));
+        return res.json({ success: true, data: formatted });
+      } else if (error) {
+        console.warn('Supabase select error:', error.message);
+      }
+    } catch (err) {
+      console.warn('Supabase query error:', err.message);
+    }
+  }
+
+  // 2. Try MongoDB
+  if (await connectToMongo()) {
+    try {
       const docs = await ResourceModel.find().sort({ createdAt: -1 });
       const formatted = docs.map(d => ({
         id: d._id.toString(),
@@ -176,13 +209,13 @@ app.get('/api/resources', async (req, res) => {
         createdAt: d.createdAt
       }));
       return res.json({ success: true, data: formatted });
+    } catch (err) {
+      console.warn('MongoDB query error:', err.message);
     }
-  } catch (err) {
-    console.warn('Error reading from DB, using fallback:', err.message);
   }
 
-  // Fallback to memory resources
-  res.json({
+  // 3. Fallback
+  return res.json({
     success: true,
     data: memoryResources
   });
@@ -199,40 +232,71 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
     });
   }
 
-  const resourceData = {
+  const payload = {
     title: title.trim(),
     description: (description || '').trim(),
     url: url.trim(),
     category: (category || 'Tất cả').trim(),
-    badge: (badge || 'NEW').trim().toUpperCase(),
-    createdAt: new Date().toISOString()
+    badge: (badge || 'NEW').trim().toUpperCase()
   };
 
-  try {
-    const hasDb = await connectToDatabase();
-    if (hasDb) {
-      const created = await ResourceModel.create(resourceData);
-      return res.status(201).json({
-        success: true,
-        message: 'Đã lưu tài nguyên vào Cloud Database thành công!',
-        data: {
-          id: created._id.toString(),
-          ...resourceData
-        }
-      });
+  // 1. Save to Supabase
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('resources')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (!error && data) {
+        return res.status(201).json({
+          success: true,
+          message: 'Đã lưu tài nguyên vào Supabase Database thành công!',
+          data: {
+            id: data.id.toString(),
+            ...payload,
+            createdAt: data.created_at
+          }
+        });
+      } else if (error) {
+        console.warn('Supabase insert error:', error.message);
+      }
+    } catch (err) {
+      console.warn('Supabase insert exception:', err.message);
     }
-  } catch (err) {
-    console.warn('Error saving to DB, using fallback:', err.message);
   }
 
-  // Fallback memory store
+  // 2. Save to MongoDB
+  if (await connectToMongo()) {
+    try {
+      const created = await ResourceModel.create({
+        ...payload,
+        createdAt: new Date()
+      });
+      return res.status(201).json({
+        success: true,
+        message: 'Đã lưu tài nguyên vào MongoDB Atlas thành công!',
+        data: {
+          id: created._id.toString(),
+          ...payload,
+          createdAt: created.createdAt
+        }
+      });
+    } catch (err) {
+      console.warn('MongoDB insert exception:', err.message);
+    }
+  }
+
+  // 3. Fallback memory save
   const newResource = {
     id: 'res-' + Date.now(),
-    ...resourceData
+    ...payload,
+    createdAt: new Date().toISOString()
   };
   memoryResources.unshift(newResource);
 
-  res.status(201).json({
+  return res.status(201).json({
     success: true,
     message: 'Đã lưu tài nguyên thành công!',
     data: newResource
@@ -243,18 +307,35 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
 app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
 
-  try {
-    const hasDb = await connectToDatabase();
-    if (hasDb) {
-      await ResourceModel.findByIdAndDelete(id);
-      return res.json({ success: true, message: 'Đã xóa tài nguyên khỏi Cloud Database!' });
+  // 1. Delete from Supabase
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('resources')
+        .delete()
+        .eq('id', id);
+
+      if (!error) {
+        return res.json({ success: true, message: 'Đã xóa tài nguyên khỏi Supabase Database!' });
+      }
+    } catch (err) {
+      console.warn('Supabase delete error:', err.message);
     }
-  } catch (err) {
-    console.warn('Error deleting from DB, using fallback:', err.message);
   }
 
+  // 2. Delete from MongoDB
+  if (await connectToMongo()) {
+    try {
+      await ResourceModel.findByIdAndDelete(id);
+      return res.json({ success: true, message: 'Đã xóa tài nguyên khỏi MongoDB Atlas!' });
+    } catch (err) {
+      console.warn('MongoDB delete error:', err.message);
+    }
+  }
+
+  // 3. Fallback memory delete
   memoryResources = memoryResources.filter(r => r.id !== id);
-  res.json({ success: true, message: 'Đã xóa tài nguyên thành công!' });
+  return res.json({ success: true, message: 'Đã xóa tài nguyên thành công!' });
 });
 
 // Direct contact endpoint

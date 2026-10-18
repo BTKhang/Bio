@@ -25,6 +25,7 @@
   "author": "Bùi Tấn Khang",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "canvas-confetti": "^1.9.4",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

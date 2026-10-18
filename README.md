@@ -11,12 +11,10 @@ Xin chào! Tôi là **Bùi Tấn Khang**, sinh viên chuyên ngành **Kỹ thu�
 - **Họ và tên**: Bùi Tấn Khang
 - **Chuyên ngành**: Kỹ thuật phần mềm (Software Engineering)
 - **Trường**: Trường Đại Học Quy Nhơn (Quy Nhon University - QNU)
-- **Định hướng**: Lập trình Web Full-Stack, phát triển ứng dụng giao diện tương tác & đồ họa 3D WebGL.
-- **Sở thích**: Khám phá công nghệ mới, xây dựng các công cụ hữu ích và chia sẻ tài nguyên mã nguồn mở cho cộng đồng.
 
 ---
 
-## 🛠️ KỸ NĂNG & CÔNG NGHỆ
+## 🛠️ CÔNG NGHỆ
 
 - **Ngôn ngữ**: JavaScript (ES6+), TypeScript, HTML5, CSS3, C/C++
 - **Nền tảng & Thư viện**: Node.js, Express.js, React, Three.js (WebGL), Vite
@@ -61,4 +59,4 @@ npm run dev
 npm run build
 npm start
 ```
-Trang web sẽ hoạt động tại `http://localhost:3000`.
+Trang web sẽ hoạt động tại `buitankhang.vercel.app`.

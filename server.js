@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,11 +15,38 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '0971642189';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // In-memory admin tokens
 const activeAdminTokens = new Set();
 
-// Resources File Path
+// Mongoose Schema for MongoDB Atlas
+const ResourceSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, default: '' },
+  url: { type: String, required: true },
+  category: { type: String, default: 'Tất cả' },
+  badge: { type: String, default: 'NEW' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ResourceModel = mongoose.models.Resource || mongoose.model('Resource', ResourceSchema);
+
+let isConnected = false;
+async function connectToDatabase() {
+  if (isConnected || !MONGODB_URI) return isConnected;
+  try {
+    const db = await mongoose.connect(MONGODB_URI);
+    isConnected = db.connections[0].readyState === 1;
+    console.log('[DATABASE] Kết nối MongoDB Atlas thành công!');
+    return isConnected;
+  } catch (err) {
+    console.warn('[DATABASE] Không kết nối được MongoDB, sử dụng file JSON cục bộ:', err.message);
+    return false;
+  }
+}
+
+// Local JSON File Fallback
 const DATA_DIR = path.join(__dirname, 'data');
 const RESOURCES_FILE = path.join(DATA_DIR, 'resources.json');
 
@@ -31,7 +59,7 @@ function ensureResourcesFile() {
   }
 }
 
-function getResources() {
+function getLocalResources() {
   ensureResourcesFile();
   try {
     const raw = fs.readFileSync(RESOURCES_FILE, 'utf-8');
@@ -41,7 +69,7 @@ function getResources() {
   }
 }
 
-function saveResources(list) {
+function saveLocalResources(list) {
   ensureResourcesFile();
   fs.writeFileSync(RESOURCES_FILE, JSON.stringify(list, null, 2), 'utf-8');
 }
@@ -71,82 +99,17 @@ const profileData = {
   name: "BÙI TẤN KHANG",
   title: "Software Engineering | Đại Học Quy Nhơn (QNU)",
   avatar: "/avatar.jpg",
-  system: "SYSTEM ONLINE: READY FOR CONNECTION | V 2.0",
-  socials: [
-    {
-      id: "icon-facebook",
-      name: "FACEBOOK",
-      code: "FB-01",
-      url: "https://www.facebook.com/buitan.khang0206",
-      details: "Tên người dùng: Bùi Tấn Khang",
-      instruction: "Nhấn 'MỞ LIÊN KẾT' để truy cập trang cá nhân.",
-      isForm: false
-    },
-    {
-      id: "icon-zalo",
-      name: "ZALO",
-      code: "ZL-02",
-      url: "https://zalo.me/0971642189",
-      details: "Số Zalo: 09XX XXX XXX",
-      instruction: "Để bảo mật, vui lòng nhấn mở liên kết để truy cập.",
-      isForm: false
-    },
-    {
-      id: "icon-email",
-      name: "EMAIL",
-      code: "EM-03",
-      url: "mailto:your.email@example.com",
-      details: "Email: your.email@example.com",
-      instruction: "Bạn có thể gửi tin nhắn ngay tại đây. Tôi sẽ phản hồi sớm nhất có thể.",
-      isForm: true,
-      formspreeEndpoint: "https://formspree.io/f/xkgdeolq"
-    },
-    {
-      id: "icon-tiktok",
-      name: "TIKTOK",
-      code: "TT-04",
-      url: "https://tiktok.com/@t.k0206",
-      details: "Tên tài khoản: ⓘ",
-      instruction: "Vui lòng nhấn mở liên kết để truy cập.",
-      isForm: false
-    },
-    {
-      id: "icon-discord",
-      name: "DISCORD",
-      code: "DC-05",
-      url: "https://discordapp.com/users/818502525991780353",
-      details: "Tên người dùng: kʜᴀɴɢ",
-      instruction: "Vui lòng nhấn mở liên kết để truy cập.",
-      isForm: false
-    },
-    {
-      id: "icon-instagram",
-      name: "INSTAGRAM",
-      code: "IG-06",
-      url: "https://instagram.com/buitan.khang0206",
-      details: "Tên người dùng: Bùi Tấn Khang",
-      instruction: "Vui lòng nhấn mở liên kết để truy cập.",
-      isForm: false
-    },
-    {
-      id: "icon-github",
-      name: "GITHUB",
-      code: "GH-07",
-      url: "https://github.com/BTKhang",
-      details: "Tên tài khoản: Bùi Tấn Khang",
-      instruction: "Vui lòng nhấn mở liên kết để truy cập.",
-      isForm: false
-    }
-  ]
+  system: "SYSTEM ONLINE: READY FOR CONNECTION | V 2.0"
 };
 
 // API: System Status
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
+  const hasDb = await connectToDatabase();
   res.json({
     status: 'ONLINE',
     version: '2.0.0',
+    database: hasDb ? 'MongoDB Atlas' : 'Local JSON File',
     uptime: Math.floor(process.uptime()),
-    memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
     timestamp: new Date().toISOString()
   });
 });
@@ -185,8 +148,28 @@ app.get('/api/admin/verify', requireAdmin, (req, res) => {
 });
 
 // API: Get Resources (Public)
-app.get('/api/resources', (req, res) => {
-  const resources = getResources();
+app.get('/api/resources', async (req, res) => {
+  try {
+    const hasDb = await connectToDatabase();
+    if (hasDb) {
+      const docs = await ResourceModel.find().sort({ createdAt: -1 });
+      const formatted = docs.map(d => ({
+        id: d._id.toString(),
+        title: d.title,
+        description: d.description,
+        url: d.url,
+        category: d.category,
+        badge: d.badge,
+        createdAt: d.createdAt
+      }));
+      return res.json({ success: true, data: formatted });
+    }
+  } catch (err) {
+    console.warn('MongoDB query fallback:', err.message);
+  }
+
+  // Fallback to local resources
+  const resources = getLocalResources();
   res.json({
     success: true,
     data: resources
@@ -194,7 +177,7 @@ app.get('/api/resources', (req, res) => {
 });
 
 // API: Add Resource (Admin only)
-app.post('/api/resources', requireAdmin, (req, res) => {
+app.post('/api/resources', requireAdmin, async (req, res) => {
   const { title, description, url, category, badge } = req.body;
 
   if (!title || !url) {
@@ -204,9 +187,7 @@ app.post('/api/resources', requireAdmin, (req, res) => {
     });
   }
 
-  const resources = getResources();
-  const newResource = {
-    id: 'res-' + Date.now(),
+  const resourceData = {
     title: title.trim(),
     description: (description || '').trim(),
     url: url.trim(),
@@ -215,8 +196,31 @@ app.post('/api/resources', requireAdmin, (req, res) => {
     createdAt: new Date().toISOString()
   };
 
+  try {
+    const hasDb = await connectToDatabase();
+    if (hasDb) {
+      const created = await ResourceModel.create(resourceData);
+      return res.status(201).json({
+        success: true,
+        message: 'Đã lưu tài nguyên vào MongoDB Atlas!',
+        data: {
+          id: created._id.toString(),
+          ...resourceData
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('MongoDB insert fallback:', err.message);
+  }
+
+  // Fallback to local JSON
+  const resources = getLocalResources();
+  const newResource = {
+    id: 'res-' + Date.now(),
+    ...resourceData
+  };
   resources.unshift(newResource);
-  saveResources(resources);
+  saveLocalResources(resources);
 
   res.status(201).json({
     success: true,
@@ -225,48 +229,24 @@ app.post('/api/resources', requireAdmin, (req, res) => {
   });
 });
 
-// API: Update Resource (Admin only)
-app.put('/api/resources/:id', requireAdmin, (req, res) => {
-  const { id } = req.params;
-  const { title, description, url, category, badge } = req.body;
-
-  const resources = getResources();
-  const idx = resources.findIndex(r => r.id === id);
-
-  if (idx === -1) {
-    return res.status(404).json({ success: false, message: 'Không tìm thấy tài nguyên để cập nhật.' });
-  }
-
-  resources[idx] = {
-    ...resources[idx],
-    title: title ? title.trim() : resources[idx].title,
-    description: description !== undefined ? description.trim() : resources[idx].description,
-    url: url ? url.trim() : resources[idx].url,
-    category: category ? category.trim() : resources[idx].category,
-    badge: badge ? badge.trim().toUpperCase() : resources[idx].badge,
-    updatedAt: new Date().toISOString()
-  };
-
-  saveResources(resources);
-
-  res.json({
-    success: true,
-    message: 'Cập nhật tài nguyên thành công!',
-    data: resources[idx]
-  });
-});
-
 // API: Delete Resource (Admin only)
-app.delete('/api/resources/:id', requireAdmin, (req, res) => {
+app.delete('/api/resources/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const resources = getResources();
-  const filtered = resources.filter(r => r.id !== id);
 
-  if (filtered.length === resources.length) {
-    return res.status(404).json({ success: false, message: 'Không tìm thấy tài nguyên để xóa.' });
+  try {
+    const hasDb = await connectToDatabase();
+    if (hasDb) {
+      await ResourceModel.findByIdAndDelete(id);
+      return res.json({ success: true, message: 'Đã xóa tài nguyên khỏi MongoDB Atlas!' });
+    }
+  } catch (err) {
+    console.warn('MongoDB delete fallback:', err.message);
   }
 
-  saveResources(filtered);
+  // Fallback to local JSON
+  const resources = getLocalResources();
+  const filtered = resources.filter(r => r.id !== id);
+  saveLocalResources(filtered);
 
   res.json({
     success: true,
@@ -320,6 +300,7 @@ app.listen(PORT, () => {
 ║  • Health check:      http://localhost:${PORT}/health      ║
 ║  • API Resources:     http://localhost:${PORT}/api/resources
 ║  • Admin Auth:        PROTECTED (PASSWORD SECURED)         ║
+║  • Database:          ${MONGODB_URI ? 'MongoDB Atlas' : 'Local JSON'}
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

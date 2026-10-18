@@ -1562,21 +1562,273 @@ html, body {
 }
 
 /* ==========================================================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN & MOBILE OPTIMIZATIONS
    ========================================================================== */
+@media (max-width: 768px) {
+  .resource-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
-  .top-hud-bar { padding: 12px 16px; }
-  .hud-telemetry { gap: 8px; }
-  .hud-sidebar { display: none; }
-  .main-stage { padding: 70px 14px 20px; }
-  .holo-card-hud { padding: 24px 18px; }
-  .profile-name { font-size: 1.55rem; }
-  .profile-subtitle { font-size: 0.92rem; }
-  .social-hud-link { padding: 11px 15px; font-size: 0.8rem; }
-  .welcome-hud-box { padding: 20px 24px; width: 90%; }
-  .welcome-title { font-size: 1.15rem; }
-  .resource-vault-section { padding: 40px 14px 60px; }
-  .vault-inner-container { padding: 24px 18px; }
-  .vault-heading { font-size: 1.4rem; }
-  .form-row { grid-template-columns: 1fr; gap: 0; }
+  /* Prevent horizontal scroll */
+  html, body {
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Top HUD Bar Mobile */
+  .top-hud-bar {
+    padding: 8px 12px;
+  }
+  .hud-telemetry {
+    gap: 8px;
+  }
+  .hud-badge {
+    padding: 3px 6px;
+    font-size: 0.65rem;
+    gap: 4px;
+  }
+  .hud-controls {
+    gap: 6px;
+  }
+  .hud-btn {
+    padding: 5px 8px;
+    font-size: 0.68rem;
+    gap: 4px;
+  }
+  .theme-switcher {
+    gap: 4px;
+  }
+  .theme-chip {
+    width: 12px;
+    height: 12px;
+  }
+  .hud-sidebar {
+    display: none;
+  }
+
+  /* Cyber Blast Door Opening on Mobile */
+  .door-center-lock {
+    width: 100px;
+    height: 100px;
+    top: 36%;
+  }
+  .lock-outer-radar {
+    width: 95px;
+    height: 95px;
+  }
+  .lock-inner-radar {
+    width: 75px;
+    height: 75px;
+  }
+  .lock-hex-badge {
+    width: 46px;
+    height: 46px;
+    font-size: 1.15rem;
+  }
+  .welcome-hud-box {
+    bottom: 5vh;
+    padding: 16px 18px;
+    width: 90%;
+    max-width: 360px;
+  }
+  .welcome-logo-pulse {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 10px;
+  }
+  .welcome-title {
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+  .welcome-subtext {
+    font-size: 0.72rem;
+    margin-bottom: 14px;
+  }
+  .welcome-enter-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.78rem;
+  }
+  .door-status-pill {
+    font-size: 0.58rem;
+    padding: 4px 10px;
+  }
+  .top-door .door-status-pill { top: 15px; right: 15px; }
+  .bottom-door .door-status-pill { bottom: 15px; left: 15px; }
+
+  /* Main Stage & Card Mobile */
+  .main-stage {
+    padding: 60px 12px 30px;
+    min-height: auto;
+  }
+  .holo-card-hud {
+    padding: 22px 14px;
+    width: 100%;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 16px) 0,
+      100% 16px,
+      100% 100%,
+      16px 100%,
+      0 calc(100% - 16px)
+    );
+  }
+  .avatar-hud-wrapper {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 12px;
+  }
+  .avatar-ring-rotating {
+    width: 110px;
+    height: 110px;
+  }
+  .avatar-ring-counter {
+    width: 120px;
+    height: 120px;
+  }
+  .avatar-image {
+    width: 90px;
+    height: 90px;
+  }
+  .profile-name {
+    font-size: 1.48rem;
+    letter-spacing: 2px;
+  }
+  .profile-subtitle {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .social-links-grid-hud {
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .social-hud-link {
+    padding: 11px 14px;
+    font-size: 0.8rem;
+  }
+  .social-icon-wrapper {
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+  }
+  .social-code-badge {
+    font-size: 0.65rem;
+  }
+  .status-bar-hud {
+    margin-top: 18px;
+    padding: 10px 12px;
+  }
+  .status-bar-text {
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+  }
+
+  /* Resource Vault Mobile */
+  .resource-vault-section {
+    padding: 30px 12px 60px;
+  }
+  .vault-inner-container {
+    padding: 20px 14px;
+    border-radius: 10px;
+  }
+  .vault-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+  }
+  .vault-heading {
+    font-size: 1.35rem;
+  }
+  .vault-subheading {
+    font-size: 0.78rem;
+  }
+  .admin-vault-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+  }
+  .vault-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .vault-search-box {
+    min-width: 100%;
+  }
+  .vault-category-chips {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .vault-category-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .category-chip {
+    flex-shrink: 0;
+    padding: 7px 12px;
+    font-size: 0.7rem;
+  }
+  .resource-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .resource-card {
+    padding: 18px 14px;
+  }
+  .resource-card-title {
+    font-size: 0.98rem;
+  }
+
+  /* Modals Mobile */
+  .modal-content-cyber {
+    width: 95%;
+    margin: 12% auto;
+    padding: 22px 16px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .admin-modal-content {
+    padding: 22px 14px;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .form-input, .form-textarea, .form-select {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS */
+    padding: 10px 12px;
+  }
+  .modal-title-cyber {
+    font-size: 1.2rem;
+  }
+  .admin-shield-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 1.3rem;
+  }
+  .admin-add-card {
+    padding: 14px 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  .hud-badge:nth-child(3) {
+    display: none; /* Hide ping on ultra narrow screens */
+  }
+  .profile-name {
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+  }
+  .welcome-title {
+    font-size: 1rem;
+  }
 }

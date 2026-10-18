@@ -392,15 +392,20 @@ export class CyberScene3D {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
 
+    const isMobile = window.innerWidth < 640;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+
+    if (this.isEntered) {
+      this.targetCameraZ = isMobile ? 17.5 : 13.8;
+    }
   }
 
   enterScene() {
     this.isEntered = true;
     this.isWarping = true;
     this.warpTimer = 1.4;
-    this.targetCameraZ = 13.8;
+    this.targetCameraZ = window.innerWidth < 640 ? 17.5 : 13.8;
   }
 
   setTheme(palette) {

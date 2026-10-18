@@ -71,7 +71,7 @@ const profileData = {
   name: "BÙI TẤN KHANG",
   title: "Software Engineering | Đại Học Quy Nhơn (QNU)",
   avatar: "/avatar.jpg",
-  system: "SYSTEM ONLINE: READY FOR CONNECTION | V 1.0",
+  system: "SYSTEM ONLINE: READY FOR CONNECTION | V 2.0",
   socials: [
     {
       id: "icon-facebook",
@@ -319,7 +319,7 @@ app.listen(PORT, () => {
 ║  • Server running on: http://localhost:${PORT}             ║
 ║  • Health check:      http://localhost:${PORT}/health      ║
 ║  • API Resources:     http://localhost:${PORT}/api/resources
-║  • Admin Password:    0971642189                           ║
+║  • Admin Auth:        PROTECTED (PASSWORD SECURED)         ║
 ╚════════════════════════════════════════════════════════════╝
   `);
 });

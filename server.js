@@ -114,11 +114,53 @@ function saveLocalLogs(list) {
   fs.writeFileSync(LOGS_FILE, JSON.stringify(list, null, 2), 'utf-8');
 }
 
-// In-memory admin tokens
-const activeAdminTokens = new Set();
+// ============================================================================
+// STATELESS CRYPTOGRAPHIC ADMIN AUTHENTICATION (HMAC-SHA256)
+// ============================================================================
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'btk_secret_vault_0971642189_2026';
+
+function generateAdminToken() {
+  const payload = {
+    role: 'admin',
+    iat: Date.now(),
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000 // Có hiệu lực 7 ngày
+  };
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', ADMIN_SECRET).update(data).digest('base64url');
+  return `${data}.${signature}`;
+}
+
+function verifyAdminToken(token) {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [data, signature] = parts;
+  const expectedSig = crypto.createHmac('sha256', ADMIN_SECRET).update(data).digest('base64url');
+  if (signature !== expectedSig) return false;
+
+  try {
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return false;
+    return payload.role === 'admin';
+  } catch (err) {
+    return false;
+  }
+}
 
 // Helper: Extract clean IP from request
-function getClientIp(req) {
+function getClientIp(req, clientProvidedIp) {
+  if (clientProvidedIp && typeof clientProvidedIp === 'string') {
+    const clean = clientProvidedIp.trim().replace(/^::ffff:/, '');
+    if (clean && !['127.0.0.1', 'localhost', '::1'].includes(clean) && !clean.startsWith('192.168.') && !clean.startsWith('10.')) {
+      return clean;
+    }
+  }
+  if (req.headers['x-real-ip']) {
+    return String(req.headers['x-real-ip']).trim().replace(/^::ffff:/, '');
+  }
+  if (req.headers['cf-connecting-ip']) {
+    return String(req.headers['cf-connecting-ip']).trim().replace(/^::ffff:/, '');
+  }
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) {
     const ips = forwarded.split(',');
@@ -141,7 +183,7 @@ function requireAdmin(req, res, next) {
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!activeAdminTokens.has(token)) {
+  if (!verifyAdminToken(token)) {
     return res.status(403).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn.' });
   }
 
@@ -192,8 +234,8 @@ app.post('/api/admin/login', (req, res) => {
     });
   }
 
-  const token = 'btk_' + crypto.randomBytes(24).toString('hex');
-  activeAdminTokens.add(token);
+  // Stateless HMAC Token
+  const token = generateAdminToken();
 
   return res.json({
     success: true,
@@ -211,14 +253,14 @@ app.get('/api/admin/verify', requireAdmin, (req, res) => {
 // ACCESS TRACKING API (GPS nếu người dùng cho phép / Tọa độ xấp xỉ qua IP nếu từ chối)
 // ============================================================================
 app.post('/api/track', async (req, res) => {
-  const { lat, lon, accuracy, source, userAgent } = req.body;
-  const clientIp = getClientIp(req);
+  const { lat, lon, accuracy, source, userAgent, clientIp: bodyIp, city: bodyCity, country: bodyCountry } = req.body;
+  const clientIp = getClientIp(req, bodyIp);
 
   let finalLat = null;
   let finalLon = null;
-  let finalCity = 'Unknown';
-  let finalCountry = 'Unknown';
-  let finalSource = 'ip';
+  let finalCity = bodyCity || 'Unknown';
+  let finalCountry = bodyCountry || 'Unknown';
+  let finalSource = source === 'gps' ? 'gps' : 'ip';
   let finalAccuracy = 'Xấp xỉ (IP)';
 
   // 1. Người dùng cấp quyền GPS
@@ -228,38 +270,49 @@ app.post('/api/track', async (req, res) => {
     finalSource = 'gps';
     finalAccuracy = accuracy ? `Chính xác (~${Math.round(accuracy)}m)` : 'GPS thiết bị';
 
-    if (req.headers['x-vercel-ip-city']) {
-      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city']);
+    if (!finalCity || finalCity === 'Unknown') {
+      if (req.headers['x-vercel-ip-city']) {
+        finalCity = decodeURIComponent(req.headers['x-vercel-ip-city']);
+      }
     }
-    if (req.headers['x-vercel-ip-country']) {
-      finalCountry = req.headers['x-vercel-ip-country'];
+    if (!finalCountry || finalCountry === 'Unknown') {
+      if (req.headers['x-vercel-ip-country']) {
+        finalCountry = req.headers['x-vercel-ip-country'];
+      }
     }
   } else {
     // 2. Người dùng từ chối GPS hoặc không hỗ trợ: Định vị xấp xỉ qua IP
     finalSource = 'ip';
 
-    if (req.headers['x-vercel-ip-latitude'] && req.headers['x-vercel-ip-longitude']) {
-      finalLat = parseFloat(req.headers['x-vercel-ip-latitude']) || null;
-      finalLon = parseFloat(req.headers['x-vercel-ip-longitude']) || null;
-      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city'] || 'Unknown');
-      finalCountry = req.headers['x-vercel-ip-country'] || 'Unknown';
-      finalAccuracy = 'Xấp xỉ (Vercel CDN)';
+    // Ưu tiên dữ liệu định vị IP từ client device
+    if (typeof lat === 'number' && typeof lon === 'number') {
+      finalLat = lat;
+      finalLon = lon;
+      finalAccuracy = 'Xấp xỉ (IP Thiết bị)';
     } else if (clientIp && !['127.0.0.1', '::1', 'localhost'].includes(clientIp)) {
       try {
-        const ipRes = await fetch(`http://ip-api.com/json/${clientIp}?fields=status,country,city,lat,lon`);
+        const ipRes = await fetch(`https://ipwho.is/${clientIp}`);
         if (ipRes.ok) {
           const ipData = await ipRes.json();
-          if (ipData.status === 'success') {
+          if (ipData && ipData.success !== false) {
             finalCity = ipData.city || finalCity;
             finalCountry = ipData.country || finalCountry;
-            finalLat = ipData.lat || null;
-            finalLon = ipData.lon || null;
+            finalLat = ipData.latitude || null;
+            finalLon = ipData.longitude || null;
             finalAccuracy = 'Xấp xỉ (IP Geo)';
           }
         }
       } catch (e) {
         console.warn('IP Geo lookup error:', e.message);
       }
+    }
+
+    if (finalLat === null && req.headers['x-vercel-ip-latitude'] && req.headers['x-vercel-ip-longitude']) {
+      finalLat = parseFloat(req.headers['x-vercel-ip-latitude']) || null;
+      finalLon = parseFloat(req.headers['x-vercel-ip-longitude']) || null;
+      if (finalCity === 'Unknown') finalCity = decodeURIComponent(req.headers['x-vercel-ip-city'] || 'Unknown');
+      if (finalCountry === 'Unknown') finalCountry = req.headers['x-vercel-ip-country'] || 'Unknown';
+      finalAccuracy = 'Xấp xỉ (Vercel CDN)';
     }
   }
 

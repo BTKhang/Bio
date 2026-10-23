@@ -172,7 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
       profileContainer.classList.add('card-enter-anim');
     }
 
-    trackVisitor();
+    // Yêu cầu quyền GPS khi người dùng click tương tác mở cửa
+    requestGpsLocation();
 
     setTimeout(() => {
       if (doorContainer) {
@@ -196,62 +197,133 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, { passive: true });
 
-  // 5.1. Visitor Location & IP Tracking (GPS with user consent / Fallback to IP)
-  let isTrackingAttempted = false;
-  function trackVisitor() {
-    if (isTrackingAttempted) return;
-    if (sessionStorage.getItem('btk_tracked')) return;
-    isTrackingAttempted = true;
-
-    const sendTrack = async (payload) => {
-      try {
-        sessionStorage.setItem('btk_tracked', 'true');
-        await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } catch (err) {
-        // Silently catch tracking errors so visitor experience is unaffected
+  // 5.1. Visitor Location & Real Public IP Tracking (GPS with user consent / Fallback to IP)
+  let cachedBrowserIp = null;
+  async function fetchBrowserIpData() {
+    if (cachedBrowserIp) return cachedBrowserIp;
+    try {
+      // Truy vấn trực tiếp từ thiết bị người dùng (Đảm bảo đúng IP mạng Việt Nam & không phụ thuộc máy chủ Mỹ)
+      const res = await fetch('https://ipwho.is/');
+      if (res.ok) {
+        const d = await res.json();
+        if (d && d.success !== false) {
+          cachedBrowserIp = {
+            clientIp: d.ip,
+            city: d.city,
+            country: d.country,
+            lat: d.latitude,
+            lon: d.longitude
+          };
+          return cachedBrowserIp;
+        }
       }
-    };
+    } catch (e) {}
+
+    try {
+      const res2 = await fetch('https://api.ipify.org?format=json');
+      if (res2.ok) {
+        const d2 = await res2.json();
+        cachedBrowserIp = { clientIp: d2.ip };
+        return cachedBrowserIp;
+      }
+    } catch (e2) {}
+
+    return null;
+  }
+
+  // Khởi động lấy IP public từ trình duyệt ngay khi load
+  fetchBrowserIpData();
+
+  let hasSentTrack = false;
+  let hasSentGps = false;
+
+  async function sendTrackingPayload(payload) {
+    try {
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      hasSentTrack = true;
+      sessionStorage.setItem('btk_tracked', 'true');
+    } catch (err) {}
+  }
+
+  // Yêu cầu GPS từ trình duyệt (Kích hoạt từ cử chỉ Click/Touch của người dùng)
+  async function requestGpsLocation() {
+    if (hasSentGps) return;
+    const ipData = (await fetchBrowserIpData()) || {};
 
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          // User consented to share precise GPS coordinates
-          sendTrack({
+          hasSentGps = true;
+          sessionStorage.setItem('btk_gps_granted', 'true');
+          sendTrackingPayload({
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
             source: 'gps',
+            clientIp: ipData.clientIp,
+            city: ipData.city,
+            country: ipData.country,
             userAgent: navigator.userAgent
           });
         },
         (_err) => {
-          // User declined or GPS timed out -> Gracefully fallback to approximate IP location
-          sendTrack({
-            source: 'ip',
-            userAgent: navigator.userAgent
-          });
+          // Người dùng từ chối cấp GPS -> Dùng tọa độ và IP thực tế Việt Nam từ browser lookup
+          if (!hasSentTrack) {
+            sendTrackingPayload({
+              source: 'ip',
+              lat: ipData.lat,
+              lon: ipData.lon,
+              clientIp: ipData.clientIp,
+              city: ipData.city,
+              country: ipData.country,
+              userAgent: navigator.userAgent
+            });
+          }
         },
         {
           enableHighAccuracy: true,
-          timeout: 7000,
+          timeout: 8000,
           maximumAge: 60000
         }
       );
     } else {
-      // Browser doesn't support Geolocation API
-      sendTrack({
-        source: 'ip',
-        userAgent: navigator.userAgent
-      });
+      if (!hasSentTrack) {
+        sendTrackingPayload({
+          source: 'ip',
+          lat: ipData.lat,
+          lon: ipData.lon,
+          clientIp: ipData.clientIp,
+          city: ipData.city,
+          country: ipData.country,
+          userAgent: navigator.userAgent
+        });
+      }
     }
   }
 
-  // Backup trigger for direct visits or if door was skipped
-  setTimeout(trackVisitor, 2200);
+  // Đăng ký cử chỉ chạm/click đầu tiên để trình duyệt cho phép hiện pop-up GPS hợp lệ
+  window.addEventListener('click', () => { requestGpsLocation(); }, { once: true });
+  window.addEventListener('touchstart', () => { requestGpsLocation(); }, { once: true });
+
+  // Tự động gửi log IP dự phòng sau 5 giây nếu người dùng không tương tác
+  setTimeout(async () => {
+    if (!hasSentTrack && !hasSentGps) {
+      const ipData = (await fetchBrowserIpData()) || {};
+      sendTrackingPayload({
+        source: 'ip',
+        lat: ipData.lat,
+        lon: ipData.lon,
+        clientIp: ipData.clientIp,
+        city: ipData.city,
+        country: ipData.country,
+        userAgent: navigator.userAgent
+      });
+    }
+  }, 5000);
 
   // 6. 3D Holographic Card Tilt with Iridescent Sheen
   const card = document.querySelector('.holo-card-hud');
@@ -691,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshLogsBtn = document.getElementById('refreshLogsBtn');
   const clearLogsBtn = document.getElementById('clearLogsBtn');
 
-  let adminToken = sessionStorage.getItem('btk_admin_token') || null;
+  let adminToken = localStorage.getItem('btk_admin_token') || sessionStorage.getItem('btk_admin_token') || null;
   let currentAdminTab = 'resources';
 
   function switchAdminTab(tabName) {
@@ -716,7 +788,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (adminTabResBtn) adminTabResBtn.addEventListener('click', () => switchAdminTab('resources'));
   if (adminTabLogsBtn) adminTabLogsBtn.addEventListener('click', () => switchAdminTab('logs'));
 
-  function showAdminView() {
+  async function showAdminView() {
+    if (adminToken) {
+      // Xác thực token với server (Nếu token hết hạn hoặc giả mạo -> yêu cầu đăng nhập lại)
+      try {
+        const verifyRes = await fetch('/api/admin/verify', {
+          headers: { Authorization: `Bearer ${adminToken}` }
+        });
+        if (!verifyRes.ok) {
+          adminToken = null;
+          localStorage.removeItem('btk_admin_token');
+          sessionStorage.removeItem('btk_admin_token');
+        }
+      } catch (e) {
+        // Lỗi mạng tạm thời, giữ nguyên token
+      }
+    }
+
     if (adminToken) {
       if (adminAuthSection) adminAuthSection.style.display = 'none';
       if (adminDashboardSection) adminDashboardSection.style.display = 'block';
@@ -759,6 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (res.ok && data.success) {
           adminToken = data.token;
+          localStorage.setItem('btk_admin_token', adminToken);
           sessionStorage.setItem('btk_admin_token', adminToken);
           cyberAudio.playSuccess();
           confetti({ particleCount: 50, spread: 60, origin: { y: 0.5 } });
@@ -777,6 +866,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (adminLogoutBtn) {
     adminLogoutBtn.addEventListener('click', () => {
       adminToken = null;
+      localStorage.removeItem('btk_admin_token');
       sessionStorage.removeItem('btk_admin_token');
       cyberAudio.playClick();
       showAdminView();
@@ -881,6 +971,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/admin/logs', {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
+      if (res.status === 401 || res.status === 403) {
+        adminToken = null;
+        localStorage.removeItem('btk_admin_token');
+        sessionStorage.removeItem('btk_admin_token');
+        showAdminView();
+        return;
+      }
       const result = await res.json();
       if (res.ok && result.success) {
         renderAdminLogs(result.data || []);

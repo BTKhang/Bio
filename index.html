@@ -375,50 +375,86 @@
         <div class="admin-dash-header">
           <div class="admin-dash-title-left">
             <span class="status-dot"></span>
-            <h4>BẢNG ĐIỀU KHIỂN TÀI NGUYÊN</h4>
+            <h4>BẢNG ĐIỀU KHIỂN HỆ THỐNG</h4>
           </div>
           <button id="adminLogoutBtn" class="admin-logout-btn" title="Đăng xuất">
             <i class="fas fa-sign-out-alt"></i> Thoát
           </button>
         </div>
 
-        <!-- Add Resource Form -->
-        <div class="admin-add-card">
-          <h5><i class="fas fa-plus-circle"></i> THÊM TÀI NGUYÊN MỚI</h5>
-          <form id="addResourceForm">
-            <div class="form-row">
-              <input type="text" id="resTitleInput" class="form-input" placeholder="Tiêu đề tài nguyên..." required>
-              <select id="resCategoryInput" class="form-input form-select">
-                <option value="Source Code">Source Code</option>
-                <option value="Tools">Tools</option>
-                <option value="Tài Liệu">Tài Liệu</option>
-                <option value="Media">Media</option>
-              </select>
-            </div>
-
-            <div class="form-row">
-              <input type="url" id="resUrlInput" class="form-input" placeholder="Đường link chia sẻ (https://...)" required>
-              <select id="resBadgeInput" class="form-input form-select">
-                <option value="NEW">Badge: NEW</option>
-                <option value="HOT">Badge: HOT</option>
-                <option value="PRO">Badge: PRO</option>
-                <option value="FREE">Badge: FREE</option>
-              </select>
-            </div>
-
-            <textarea id="resDescInput" class="form-textarea" placeholder="Mô tả ngắn về tài nguyên này..."></textarea>
-
-            <button type="submit" class="modal-action-button" id="submitResourceBtn" data-ripple>
-              <i class="fas fa-cloud-upload-alt"></i> ĐĂNG TÀI NGUYÊN LÊN WEB
-            </button>
-          </form>
-          <p id="addResourceMsg" class="admin-success-text"></p>
+        <!-- Navigation Tabs: Tài nguyên & Nhật ký truy cập -->
+        <div class="admin-tab-nav">
+          <button type="button" class="admin-tab-btn active" id="adminTabResBtn">
+            <i class="fas fa-boxes"></i> KHO TÀI NGUYÊN
+          </button>
+          <button type="button" class="admin-tab-btn" id="adminTabLogsBtn">
+            <i class="fas fa-map-marker-alt"></i> NHẬT KÝ TRUY CẬP (IP & GPS)
+          </button>
         </div>
 
-        <!-- Current Resources List in Admin -->
-        <div class="admin-list-section">
-          <h5>DANH SÁCH HIỆN CÓ (<span id="adminResourceCount">0</span>)</h5>
-          <div id="adminResourcesList" class="admin-resources-list">
+        <!-- TAB PANE 1: Quản lý tài nguyên -->
+        <div id="adminPaneResources" class="admin-tab-pane active">
+          <!-- Add Resource Form -->
+          <div class="admin-add-card">
+            <h5><i class="fas fa-plus-circle"></i> THÊM TÀI NGUYÊN MỚI</h5>
+            <form id="addResourceForm">
+              <div class="form-row">
+                <input type="text" id="resTitleInput" class="form-input" placeholder="Tiêu đề tài nguyên..." required>
+                <select id="resCategoryInput" class="form-input form-select">
+                  <option value="Source Code">Source Code</option>
+                  <option value="Tools">Tools</option>
+                  <option value="Tài Liệu">Tài Liệu</option>
+                  <option value="Media">Media</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <input type="url" id="resUrlInput" class="form-input" placeholder="Đường link chia sẻ (https://...)" required>
+                <select id="resBadgeInput" class="form-input form-select">
+                  <option value="NEW">Badge: NEW</option>
+                  <option value="HOT">Badge: HOT</option>
+                  <option value="PRO">Badge: PRO</option>
+                  <option value="FREE">Badge: FREE</option>
+                </select>
+              </div>
+
+              <textarea id="resDescInput" class="form-textarea" placeholder="Mô tả ngắn về tài nguyên này..."></textarea>
+
+              <button type="submit" class="modal-action-button" id="submitResourceBtn" data-ripple>
+                <i class="fas fa-cloud-upload-alt"></i> ĐĂNG TÀI NGUYÊN LÊN WEB
+              </button>
+            </form>
+            <p id="addResourceMsg" class="admin-success-text"></p>
+          </div>
+
+          <!-- Current Resources List in Admin -->
+          <div class="admin-list-section">
+            <h5>DANH SÁCH HIỆN CÓ (<span id="adminResourceCount">0</span>)</h5>
+            <div id="adminResourcesList" class="admin-resources-list">
+              <!-- Populated via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB PANE 2: Nhật ký truy cập (IP & Vị trí GPS / Ước tính IP) -->
+        <div id="adminPaneLogs" class="admin-tab-pane" style="display: none;">
+          <div class="admin-logs-toolbar">
+            <div class="logs-stats-chips">
+              <span class="log-stat-chip">Tổng lượt: <strong id="statTotalLogs">0</strong></span>
+              <span class="log-stat-chip gps">GPS: <strong id="statGpsLogs">0</strong></span>
+              <span class="log-stat-chip ip">IP: <strong id="statIpLogs">0</strong></span>
+            </div>
+            <div class="logs-actions">
+              <button type="button" id="refreshLogsBtn" class="admin-mini-btn" title="Tải lại">
+                <i class="fas fa-sync-alt"></i> Làm mới
+              </button>
+              <button type="button" id="clearLogsBtn" class="admin-mini-btn danger" title="Xóa toàn bộ">
+                <i class="fas fa-trash-alt"></i> Xóa log
+              </button>
+            </div>
+          </div>
+
+          <div id="adminLogsList" class="admin-logs-list">
             <!-- Populated via JS -->
           </div>
         </div>

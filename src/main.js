@@ -172,6 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
       profileContainer.classList.add('card-enter-anim');
     }
 
+    trackVisitor();
+
     setTimeout(() => {
       if (doorContainer) {
         doorContainer.style.display = 'none';
@@ -193,6 +195,63 @@ document.addEventListener('DOMContentLoaded', () => {
       triggerDoorOpen();
     }
   }, { passive: true });
+
+  // 5.1. Visitor Location & IP Tracking (GPS with user consent / Fallback to IP)
+  let isTrackingAttempted = false;
+  function trackVisitor() {
+    if (isTrackingAttempted) return;
+    if (sessionStorage.getItem('btk_tracked')) return;
+    isTrackingAttempted = true;
+
+    const sendTrack = async (payload) => {
+      try {
+        sessionStorage.setItem('btk_tracked', 'true');
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        // Silently catch tracking errors so visitor experience is unaffected
+      }
+    };
+
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          // User consented to share precise GPS coordinates
+          sendTrack({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            source: 'gps',
+            userAgent: navigator.userAgent
+          });
+        },
+        (_err) => {
+          // User declined or GPS timed out -> Gracefully fallback to approximate IP location
+          sendTrack({
+            source: 'ip',
+            userAgent: navigator.userAgent
+          });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 7000,
+          maximumAge: 60000
+        }
+      );
+    } else {
+      // Browser doesn't support Geolocation API
+      sendTrack({
+        source: 'ip',
+        userAgent: navigator.userAgent
+      });
+    }
+  }
+
+  // Backup trigger for direct visits or if door was skipped
+  setTimeout(trackVisitor, 2200);
 
   // 6. 3D Holographic Card Tilt with Iridescent Sheen
   const card = document.querySelector('.holo-card-hud');
@@ -256,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add hover & click sound to interactive elements
   function bindAudioTriggers(parent = document) {
     const hoverSoundTargets = parent.querySelectorAll(
-      '.social-hud-link, .hud-btn, .welcome-enter-btn, .avatar-image, .modal-action-button, .close-button-cyber, .theme-chip, .door-center-lock, .admin-vault-btn, .category-chip, .resource-action-link, .admin-logout-btn, .admin-del-btn'
+      '.social-hud-link, .hud-btn, .welcome-enter-btn, .avatar-image, .modal-action-button, .close-button-cyber, .theme-chip, .door-center-lock, .admin-vault-btn, .category-chip, .resource-action-link, .admin-logout-btn, .admin-del-btn, .admin-tab-btn, .admin-mini-btn, .log-maps-link'
     );
     hoverSoundTargets.forEach((el) => {
       el.removeEventListener('mouseenter', hoverHandler);
@@ -620,13 +679,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminResourcesList = document.getElementById('adminResourcesList');
   const adminResourceCount = document.getElementById('adminResourceCount');
 
+  // Admin Navigation Tabs & Logs Elements
+  const adminTabResBtn = document.getElementById('adminTabResBtn');
+  const adminTabLogsBtn = document.getElementById('adminTabLogsBtn');
+  const adminPaneResources = document.getElementById('adminPaneResources');
+  const adminPaneLogs = document.getElementById('adminPaneLogs');
+  const adminLogsList = document.getElementById('adminLogsList');
+  const statTotalLogs = document.getElementById('statTotalLogs');
+  const statGpsLogs = document.getElementById('statGpsLogs');
+  const statIpLogs = document.getElementById('statIpLogs');
+  const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+  const clearLogsBtn = document.getElementById('clearLogsBtn');
+
   let adminToken = sessionStorage.getItem('btk_admin_token') || null;
+  let currentAdminTab = 'resources';
+
+  function switchAdminTab(tabName) {
+    currentAdminTab = tabName;
+    cyberAudio.playClick();
+
+    if (tabName === 'logs') {
+      if (adminTabResBtn) adminTabResBtn.classList.remove('active');
+      if (adminTabLogsBtn) adminTabLogsBtn.classList.add('active');
+      if (adminPaneResources) adminPaneResources.style.display = 'none';
+      if (adminPaneLogs) adminPaneLogs.style.display = 'block';
+      fetchAdminLogs();
+    } else {
+      if (adminTabResBtn) adminTabResBtn.classList.add('active');
+      if (adminTabLogsBtn) adminTabLogsBtn.classList.remove('active');
+      if (adminPaneResources) adminPaneResources.style.display = 'block';
+      if (adminPaneLogs) adminPaneLogs.style.display = 'none';
+      renderAdminResources();
+    }
+  }
+
+  if (adminTabResBtn) adminTabResBtn.addEventListener('click', () => switchAdminTab('resources'));
+  if (adminTabLogsBtn) adminTabLogsBtn.addEventListener('click', () => switchAdminTab('logs'));
 
   function showAdminView() {
     if (adminToken) {
       if (adminAuthSection) adminAuthSection.style.display = 'none';
       if (adminDashboardSection) adminDashboardSection.style.display = 'block';
-      renderAdminResources();
+      switchAdminTab(currentAdminTab || 'resources');
     } else {
       if (adminAuthSection) adminAuthSection.style.display = 'block';
       if (adminDashboardSection) adminDashboardSection.style.display = 'none';
@@ -773,6 +867,135 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Lỗi xóa tài nguyên');
         }
       });
+    });
+  }
+
+  // Fetch Admin Access Logs (IP & GPS / Approximate)
+  async function fetchAdminLogs() {
+    if (!adminToken) return;
+    if (adminLogsList) {
+      adminLogsList.innerHTML = '<div class="admin-logs-empty"><i class="fas fa-spinner fa-spin"></i> Đang tải dữ liệu truy cập...</div>';
+    }
+
+    try {
+      const res = await fetch('/api/admin/logs', {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        renderAdminLogs(result.data || []);
+      } else {
+        if (adminLogsList) {
+          adminLogsList.innerHTML = `<div class="admin-logs-empty" style="color: #f87171;">${escapeHtml(result.message || 'Lỗi tải nhật ký.')}</div>`;
+        }
+      }
+    } catch (err) {
+      if (adminLogsList) {
+        adminLogsList.innerHTML = '<div class="admin-logs-empty" style="color: #f87171;">Lỗi kết nối máy chủ khi lấy nhật ký.</div>';
+      }
+    }
+  }
+
+  // Render Admin Access Logs
+  function renderAdminLogs(logs) {
+    if (!adminLogsList) return;
+    if (statTotalLogs) statTotalLogs.textContent = logs.length;
+    const gpsCount = logs.filter((l) => l.loc_source === 'gps').length;
+    if (statGpsLogs) statGpsLogs.textContent = gpsCount;
+    if (statIpLogs) statIpLogs.textContent = logs.length - gpsCount;
+
+    if (!logs || logs.length === 0) {
+      adminLogsList.innerHTML = '<div class="admin-logs-empty"><i class="fas fa-satellite-dish"></i> Chưa có lượt truy cập nào được ghi nhận.</div>';
+      return;
+    }
+
+    adminLogsList.innerHTML = logs
+      .map((log) => {
+        const isGps = log.loc_source === 'gps';
+        const tagClass = isGps ? 'gps' : 'ip';
+        const tagLabel = isGps ? 'GPS THỰC' : 'IP XẤP XỈ';
+        const timeStr = log.created_at
+          ? new Date(log.created_at).toLocaleString('vi-VN', {
+              dateStyle: 'short',
+              timeStyle: 'medium'
+            })
+          : 'Vừa xong';
+
+        let locationDisplay = '';
+        if (log.city && log.city !== 'Unknown') {
+          locationDisplay += escapeHtml(log.city);
+        }
+        if (log.country && log.country !== 'Unknown') {
+          locationDisplay += (locationDisplay ? ', ' : '') + escapeHtml(log.country);
+        }
+        if (!locationDisplay) locationDisplay = 'Địa điểm chưa xác định';
+
+        let coordsDisplay = '';
+        let mapBtn = '';
+        if (typeof log.latitude === 'number' && typeof log.longitude === 'number') {
+          coordsDisplay = `<span class="log-coords">[${log.latitude.toFixed(4)}, ${log.longitude.toFixed(4)}] ${escapeHtml(log.accuracy || '')}</span>`;
+          mapBtn = `
+            <a href="https://www.google.com/maps?q=${log.latitude},${log.longitude}" target="_blank" rel="noopener noreferrer" class="log-maps-link" title="Xem trên Google Maps">
+              <i class="fas fa-external-link-alt"></i> Bản đồ
+            </a>
+          `;
+        }
+
+        const uaSafe = escapeHtml(log.user_agent || 'Không rõ thiết bị');
+
+        return `
+          <div class="log-item-card">
+            <div class="log-item-header">
+              <span class="log-ip"><i class="fas fa-network-wired"></i> ${escapeHtml(log.ip_address || '127.0.0.1')}</span>
+              <span class="log-tag ${tagClass}">${tagLabel}</span>
+            </div>
+            <div class="log-item-location">
+              <div class="log-loc-text">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>${locationDisplay}</span>
+                ${coordsDisplay}
+              </div>
+              ${mapBtn}
+            </div>
+            <div class="log-item-footer">
+              <span class="log-ua" title="${uaSafe}">${uaSafe}</span>
+              <span class="log-time"><i class="far fa-clock"></i> ${timeStr}</span>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    bindAudioTriggers(adminLogsList);
+  }
+
+  // Refresh logs button
+  if (refreshLogsBtn) {
+    refreshLogsBtn.addEventListener('click', () => {
+      cyberAudio.playClick();
+      fetchAdminLogs();
+    });
+  }
+
+  // Clear all logs button
+  if (clearLogsBtn) {
+    clearLogsBtn.addEventListener('click', async () => {
+      if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử truy cập?')) return;
+      try {
+        const res = await fetch('/api/admin/logs', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${adminToken}` }
+        });
+        const result = await res.json();
+        if (res.ok && result.success) {
+          cyberAudio.playSuccess();
+          fetchAdminLogs();
+        } else {
+          alert(result.message || 'Không thể xóa nhật ký.');
+        }
+      } catch (err) {
+        alert('Lỗi kết nối khi xóa nhật ký.');
+      }
     });
   }
 

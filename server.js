@@ -42,6 +42,19 @@ const ResourceSchema = new mongoose.Schema({
 });
 const ResourceModel = mongoose.models.Resource || mongoose.model('Resource', ResourceSchema);
 
+const LogSchema = new mongoose.Schema({
+  ip_address: { type: String, default: '' },
+  city: { type: String, default: '' },
+  country: { type: String, default: '' },
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  loc_source: { type: String, default: 'ip' },
+  accuracy: { type: String, default: '' },
+  user_agent: { type: String, default: '' },
+  created_at: { type: Date, default: Date.now }
+});
+const LogModel = mongoose.models.AccessLog || mongoose.model('AccessLog', LogSchema);
+
 let isMongoConnected = false;
 async function connectToMongo() {
   if (isMongoConnected || !MONGODB_URI) return isMongoConnected;
@@ -57,18 +70,22 @@ async function connectToMongo() {
 // 3. Local JSON Fallback
 const DATA_DIR = path.join(__dirname, 'data');
 const RESOURCES_FILE = path.join(DATA_DIR, 'resources.json');
+const LOGS_FILE = path.join(DATA_DIR, 'access_logs.json');
 
-function ensureResourcesFile() {
+function ensureDataFiles() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   if (!fs.existsSync(RESOURCES_FILE)) {
     fs.writeFileSync(RESOURCES_FILE, JSON.stringify([], null, 2), 'utf-8');
   }
+  if (!fs.existsSync(LOGS_FILE)) {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify([], null, 2), 'utf-8');
+  }
 }
 
 function getLocalResources() {
-  ensureResourcesFile();
+  ensureDataFiles();
   try {
     const raw = fs.readFileSync(RESOURCES_FILE, 'utf-8');
     return JSON.parse(raw);
@@ -78,12 +95,38 @@ function getLocalResources() {
 }
 
 function saveLocalResources(list) {
-  ensureResourcesFile();
+  ensureDataFiles();
   fs.writeFileSync(RESOURCES_FILE, JSON.stringify(list, null, 2), 'utf-8');
+}
+
+function getLocalLogs() {
+  ensureDataFiles();
+  try {
+    const raw = fs.readFileSync(LOGS_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalLogs(list) {
+  ensureDataFiles();
+  fs.writeFileSync(LOGS_FILE, JSON.stringify(list, null, 2), 'utf-8');
 }
 
 // In-memory admin tokens
 const activeAdminTokens = new Set();
+
+// Helper: Extract clean IP from request
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ips = forwarded.split(',');
+    return ips[0].trim().replace(/^::ffff:/, '');
+  }
+  const remote = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+  return remote.replace(/^::ffff:/, '');
+}
 
 // Middleware
 app.use(cors());
@@ -164,7 +207,199 @@ app.get('/api/admin/verify', requireAdmin, (req, res) => {
   res.json({ success: true, message: 'Admin session hợp lệ.' });
 });
 
-// API: Get Resources (Public)
+// ============================================================================
+// ACCESS TRACKING API (GPS nếu người dùng cho phép / Tọa độ xấp xỉ qua IP nếu từ chối)
+// ============================================================================
+app.post('/api/track', async (req, res) => {
+  const { lat, lon, accuracy, source, userAgent } = req.body;
+  const clientIp = getClientIp(req);
+
+  let finalLat = null;
+  let finalLon = null;
+  let finalCity = 'Unknown';
+  let finalCountry = 'Unknown';
+  let finalSource = 'ip';
+  let finalAccuracy = 'Xấp xỉ (IP)';
+
+  // 1. Người dùng cấp quyền GPS
+  if (source === 'gps' && typeof lat === 'number' && typeof lon === 'number') {
+    finalLat = lat;
+    finalLon = lon;
+    finalSource = 'gps';
+    finalAccuracy = accuracy ? `Chính xác (~${Math.round(accuracy)}m)` : 'GPS thiết bị';
+
+    if (req.headers['x-vercel-ip-city']) {
+      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city']);
+    }
+    if (req.headers['x-vercel-ip-country']) {
+      finalCountry = req.headers['x-vercel-ip-country'];
+    }
+  } else {
+    // 2. Người dùng từ chối GPS hoặc không hỗ trợ: Định vị xấp xỉ qua IP
+    finalSource = 'ip';
+
+    if (req.headers['x-vercel-ip-latitude'] && req.headers['x-vercel-ip-longitude']) {
+      finalLat = parseFloat(req.headers['x-vercel-ip-latitude']) || null;
+      finalLon = parseFloat(req.headers['x-vercel-ip-longitude']) || null;
+      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city'] || 'Unknown');
+      finalCountry = req.headers['x-vercel-ip-country'] || 'Unknown';
+      finalAccuracy = 'Xấp xỉ (Vercel CDN)';
+    } else if (clientIp && !['127.0.0.1', '::1', 'localhost'].includes(clientIp)) {
+      try {
+        const ipRes = await fetch(`http://ip-api.com/json/${clientIp}?fields=status,country,city,lat,lon`);
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.status === 'success') {
+            finalCity = ipData.city || finalCity;
+            finalCountry = ipData.country || finalCountry;
+            finalLat = ipData.lat || null;
+            finalLon = ipData.lon || null;
+            finalAccuracy = 'Xấp xỉ (IP Geo)';
+          }
+        }
+      } catch (e) {
+        console.warn('IP Geo lookup error:', e.message);
+      }
+    }
+  }
+
+  const logData = {
+    id: 'log-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+    ip_address: clientIp || 'Unknown',
+    city: finalCity,
+    country: finalCountry,
+    latitude: finalLat,
+    longitude: finalLon,
+    loc_source: finalSource,
+    accuracy: finalAccuracy,
+    user_agent: userAgent || req.headers['user-agent'] || '',
+    created_at: new Date().toISOString()
+  };
+
+  // 1. Supabase
+  if (supabase) {
+    try {
+      await supabase.from('access_logs').insert([{
+        ip_address: logData.ip_address,
+        city: logData.city,
+        country: logData.country,
+        latitude: logData.latitude,
+        longitude: logData.longitude,
+        loc_source: logData.loc_source,
+        accuracy: logData.accuracy,
+        user_agent: logData.user_agent
+      }]);
+    } catch (err) {
+      console.warn('Supabase access_logs insert error:', err.message);
+    }
+  }
+
+  // 2. MongoDB
+  if (await connectToMongo()) {
+    try {
+      await LogModel.create(logData);
+    } catch (err) {
+      console.warn('MongoDB access_logs insert error:', err.message);
+    }
+  }
+
+  // 3. Local JSON
+  const localLogs = getLocalLogs();
+  localLogs.unshift(logData);
+  if (localLogs.length > 100) localLogs.pop();
+  saveLocalLogs(localLogs);
+
+  return res.json({
+    success: true,
+    data: {
+      ip: logData.ip_address,
+      loc_source: logData.loc_source,
+      city: logData.city,
+      country: logData.country
+    }
+  });
+});
+
+// API: Get Access Logs (Admin only)
+app.get('/api/admin/logs', requireAdmin, async (req, res) => {
+  // 1. Supabase
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('access_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(60);
+
+      if (!error && data) {
+        const formatted = data.map(item => ({
+          id: item.id.toString(),
+          ip_address: item.ip_address,
+          city: item.city,
+          country: item.country,
+          latitude: item.latitude,
+          longitude: item.longitude,
+          loc_source: item.loc_source,
+          accuracy: item.accuracy,
+          user_agent: item.user_agent,
+          created_at: item.created_at
+        }));
+        return res.json({ success: true, data: formatted });
+      }
+    } catch (err) {
+      console.warn('Supabase access_logs select error:', err.message);
+    }
+  }
+
+  // 2. MongoDB
+  if (await connectToMongo()) {
+    try {
+      const docs = await LogModel.find().sort({ created_at: -1 }).limit(60);
+      const formatted = docs.map(d => ({
+        id: d._id.toString(),
+        ip_address: d.ip_address,
+        city: d.city,
+        country: d.country,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        loc_source: d.loc_source,
+        accuracy: d.accuracy,
+        user_agent: d.user_agent,
+        created_at: d.created_at
+      }));
+      return res.json({ success: true, data: formatted });
+    } catch (err) {
+      console.warn('MongoDB access_logs select error:', err.message);
+    }
+  }
+
+  // 3. Local JSON
+  const localLogs = getLocalLogs();
+  return res.json({
+    success: true,
+    data: localLogs
+  });
+});
+
+// API: Clear Access Logs (Admin only)
+app.delete('/api/admin/logs', requireAdmin, async (req, res) => {
+  if (supabase) {
+    try {
+      await supabase.from('access_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (e) {}
+  }
+  if (await connectToMongo()) {
+    try {
+      await LogModel.deleteMany({});
+    } catch (e) {}
+  }
+  saveLocalLogs([]);
+  res.json({ success: true, message: 'Đã xóa toàn bộ nhật ký truy cập!' });
+});
+
+// ============================================================================
+// RESOURCE VAULT API
+// ============================================================================
 app.get('/api/resources', async (req, res) => {
   // 1. Supabase
   if (supabase) {
@@ -390,6 +625,7 @@ app.listen(PORT, () => {
 ║  • Server running on: http://localhost:${PORT}             ║
 ║  • Health check:      http://localhost:${PORT}/health      ║
 ║  • API Resources:     http://localhost:${PORT}/api/resources
+║  • API Track Visitors: http://localhost:${PORT}/api/track   ║
 ║  • Admin Auth:        PROTECTED (PASSWORD SECURED)         ║
 ║  • Database:          ${activeDb}
 ╚════════════════════════════════════════════════════════════╝

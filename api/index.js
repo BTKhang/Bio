@@ -35,6 +35,19 @@ const ResourceSchema = new mongoose.Schema({
 });
 const ResourceModel = mongoose.models.Resource || mongoose.model('Resource', ResourceSchema);
 
+const LogSchema = new mongoose.Schema({
+  ip_address: { type: String, default: '' },
+  city: { type: String, default: '' },
+  country: { type: String, default: '' },
+  latitude: { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  loc_source: { type: String, default: 'ip' }, // 'gps' | 'ip'
+  accuracy: { type: String, default: '' },
+  user_agent: { type: String, default: '' },
+  created_at: { type: Date, default: Date.now }
+});
+const LogModel = mongoose.models.AccessLog || mongoose.model('AccessLog', LogSchema);
+
 let isMongoConnected = false;
 async function connectToMongo() {
   if (isMongoConnected || !MONGODB_URI) return isMongoConnected;
@@ -47,7 +60,7 @@ async function connectToMongo() {
   }
 }
 
-// 3. In-memory / Initial Fallback Dataset
+// 3. In-memory Fallback Dataset
 const defaultResources = [
   {
     id: "res-1",
@@ -88,12 +101,24 @@ const defaultResources = [
 ];
 
 let memoryResources = [...defaultResources];
+let memoryLogs = [];
 const activeAdminTokens = new Set();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Helper: Extract clean IP from request
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ips = forwarded.split(',');
+    return ips[0].trim().replace(/^::ffff:/, '');
+  }
+  const remote = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+  return remote.replace(/^::ffff:/, '');
+}
 
 // Auth middleware for admin operations
 function requireAdmin(req, res, next) {
@@ -166,7 +191,199 @@ app.get('/api/admin/verify', requireAdmin, (req, res) => {
   res.json({ success: true, message: 'Admin session hợp lệ.' });
 });
 
-// API: Get Resources (Public)
+// ============================================================================
+// ACCESS TRACKING API (GPS nếu người dùng cho phép / Tọa độ xấp xỉ qua IP nếu từ chối)
+// ============================================================================
+app.post('/api/track', async (req, res) => {
+  const { lat, lon, accuracy, source, userAgent } = req.body;
+  const clientIp = getClientIp(req);
+
+  let finalLat = null;
+  let finalLon = null;
+  let finalCity = 'Unknown';
+  let finalCountry = 'Unknown';
+  let finalSource = 'ip'; // 'gps' | 'ip'
+  let finalAccuracy = 'Xấp xỉ (IP)';
+
+  // 1. Nếu người dùng cho phép chia sẻ vị trí GPS thực tế
+  if (source === 'gps' && typeof lat === 'number' && typeof lon === 'number') {
+    finalLat = lat;
+    finalLon = lon;
+    finalSource = 'gps';
+    finalAccuracy = accuracy ? `Chính xác (~${Math.round(accuracy)}m)` : 'GPS thiết bị';
+
+    // Lấy thành phố từ Vercel headers nếu có để hiển thị thêm
+    if (req.headers['x-vercel-ip-city']) {
+      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city']);
+    }
+    if (req.headers['x-vercel-ip-country']) {
+      finalCountry = req.headers['x-vercel-ip-country'];
+    }
+  } else {
+    // 2. Nếu người dùng từ chối GPS hoặc không hỗ trợ: Định vị xấp xỉ qua IP
+    finalSource = 'ip';
+
+    // Ưu tiên Vercel Geo Headers
+    if (req.headers['x-vercel-ip-latitude'] && req.headers['x-vercel-ip-longitude']) {
+      finalLat = parseFloat(req.headers['x-vercel-ip-latitude']) || null;
+      finalLon = parseFloat(req.headers['x-vercel-ip-longitude']) || null;
+      finalCity = decodeURIComponent(req.headers['x-vercel-ip-city'] || 'Unknown');
+      finalCountry = req.headers['x-vercel-ip-country'] || 'Unknown';
+      finalAccuracy = 'Xấp xỉ (Vercel CDN)';
+    } else if (clientIp && !['127.0.0.1', '::1', 'localhost'].includes(clientIp)) {
+      // Gọi API định vị IP ngoài nếu không có header Vercel (ví dụ khi chạy host riêng)
+      try {
+        const ipRes = await fetch(`http://ip-api.com/json/${clientIp}?fields=status,country,city,lat,lon`);
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.status === 'success') {
+            finalCity = ipData.city || finalCity;
+            finalCountry = ipData.country || finalCountry;
+            finalLat = ipData.lat || null;
+            finalLon = ipData.lon || null;
+            finalAccuracy = 'Xấp xỉ (IP Geo)';
+          }
+        }
+      } catch (e) {
+        console.warn('IP Geo lookup error:', e.message);
+      }
+    }
+  }
+
+  const logData = {
+    id: 'log-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+    ip_address: clientIp || 'Unknown',
+    city: finalCity,
+    country: finalCountry,
+    latitude: finalLat,
+    longitude: finalLon,
+    loc_source: finalSource,
+    accuracy: finalAccuracy,
+    user_agent: userAgent || req.headers['user-agent'] || '',
+    created_at: new Date().toISOString()
+  };
+
+  // Lưu vào Supabase (nếu có bảng access_logs)
+  if (supabase) {
+    try {
+      await supabase.from('access_logs').insert([{
+        ip_address: logData.ip_address,
+        city: logData.city,
+        country: logData.country,
+        latitude: logData.latitude,
+        longitude: logData.longitude,
+        loc_source: logData.loc_source,
+        accuracy: logData.accuracy,
+        user_agent: logData.user_agent
+      }]);
+    } catch (err) {
+      console.warn('Supabase access_logs insert error:', err.message);
+    }
+  }
+
+  // Lưu vào MongoDB (nếu có kết nối)
+  if (await connectToMongo()) {
+    try {
+      await LogModel.create(logData);
+    } catch (err) {
+      console.warn('MongoDB access_logs insert error:', err.message);
+    }
+  }
+
+  // Lưu vào bộ nhớ tạm
+  memoryLogs.unshift(logData);
+  if (memoryLogs.length > 100) memoryLogs.pop();
+
+  return res.json({
+    success: true,
+    data: {
+      ip: logData.ip_address,
+      loc_source: logData.loc_source,
+      city: logData.city,
+      country: logData.country
+    }
+  });
+});
+
+// API: Get Access Logs (Admin only)
+app.get('/api/admin/logs', requireAdmin, async (req, res) => {
+  // 1. Supabase
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('access_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(60);
+
+      if (!error && data) {
+        const formatted = data.map(item => ({
+          id: item.id.toString(),
+          ip_address: item.ip_address,
+          city: item.city,
+          country: item.country,
+          latitude: item.latitude,
+          longitude: item.longitude,
+          loc_source: item.loc_source,
+          accuracy: item.accuracy,
+          user_agent: item.user_agent,
+          created_at: item.created_at
+        }));
+        return res.json({ success: true, data: formatted });
+      }
+    } catch (err) {
+      console.warn('Supabase access_logs select error:', err.message);
+    }
+  }
+
+  // 2. MongoDB
+  if (await connectToMongo()) {
+    try {
+      const docs = await LogModel.find().sort({ created_at: -1 }).limit(60);
+      const formatted = docs.map(d => ({
+        id: d._id.toString(),
+        ip_address: d.ip_address,
+        city: d.city,
+        country: d.country,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        loc_source: d.loc_source,
+        accuracy: d.accuracy,
+        user_agent: d.user_agent,
+        created_at: d.created_at
+      }));
+      return res.json({ success: true, data: formatted });
+    } catch (err) {
+      console.warn('MongoDB access_logs select error:', err.message);
+    }
+  }
+
+  // 3. Fallback memory logs
+  return res.json({
+    success: true,
+    data: memoryLogs
+  });
+});
+
+// API: Clear Access Logs (Admin only)
+app.delete('/api/admin/logs', requireAdmin, async (req, res) => {
+  if (supabase) {
+    try {
+      await supabase.from('access_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (e) {}
+  }
+  if (await connectToMongo()) {
+    try {
+      await LogModel.deleteMany({});
+    } catch (e) {}
+  }
+  memoryLogs = [];
+  res.json({ success: true, message: 'Đã xóa toàn bộ nhật ký truy cập!' });
+});
+
+// ============================================================================
+// RESOURCE VAULT API
+// ============================================================================
 app.get('/api/resources', async (req, res) => {
   // 1. Try Supabase
   if (supabase) {
@@ -187,8 +404,6 @@ app.get('/api/resources', async (req, res) => {
           createdAt: item.created_at
         }));
         return res.json({ success: true, data: formatted });
-      } else if (error) {
-        console.warn('Supabase select error:', error.message);
       }
     } catch (err) {
       console.warn('Supabase query error:', err.message);
@@ -259,8 +474,6 @@ app.post('/api/resources', requireAdmin, async (req, res) => {
             createdAt: data.created_at
           }
         });
-      } else if (error) {
-        console.warn('Supabase insert error:', error.message);
       }
     } catch (err) {
       console.warn('Supabase insert exception:', err.message);
